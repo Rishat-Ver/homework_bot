@@ -15,24 +15,19 @@ load_dotenv()
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
-
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-
-
-
 logger = logging.getLogger(__name__)
-level=logging.DEBUG
+level = logging.DEBUG
 logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s, %(levelname)s, %(message)s, %(name)s')
+formatter = logging.Formatter(
+    '%(asctime)s, %(levelname)s, %(message)s, %(name)s')
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -135,21 +130,18 @@ def main():
     current_timestamp = int(time.time())
     logger.info('Бот запущен')
     old_message = ''
-
     while True:
         try:
             if type(current_timestamp) is not int:
                 raise SystemError('В функцию передана не дата')
             response = get_api_answer(current_timestamp)
             response = check_response(response)
-
             if len(response) > 0:
                 homework_status = parse_status(response[0])
                 if homework_status is not None:
                     send_message(bot, homework_status)
             else:
                 logger.debug('нет новых статусов')
-
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
