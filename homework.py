@@ -35,7 +35,7 @@ logger.addHandler(handler)
 
 def send_message(bot, message):
     """Отправка сообщения в Телегу."""
-    logger.debug('Регестрируем сообщение с уровнем debug , если оно отправленно')
+    logger.debug('Регестрируем с уровнем debug , если оно отправленно')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Успешная отправка сообщения.')
