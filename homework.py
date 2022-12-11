@@ -31,12 +31,11 @@ formatter = logging.Formatter(
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-old_message = ''
 
 
 def send_message(bot, message):
     """Отправка сообщения в Телегу."""
-    logger.debug('Сообщение Telegram было отправлено')
+    logger.debug('Регестрируем сообщение с уровнем debug , если оно отправленно')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Успешная отправка сообщения.')
@@ -49,28 +48,28 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
-        homework_statuses = requests.get(ENDPOINT,
-                                         headers=HEADERS,
-                                         params=params)
+        response = requests.get(ENDPOINT,
+                                headers=HEADERS,
+                                params=params)
     except Exception as error:
         raise SystemError(f'Ошибка получения request, {error}')
     else:
-        if homework_statuses.status_code == HTTPStatus.OK:
+        if response.status_code == HTTPStatus.OK:
             logger.info('успешное получение Эндпоинта')
-            homework = homework_statuses.json()
+            homework = response.json()
             if 'error' in homework:
                 raise SystemError(f'Ошибка json, {homework["error"]}')
             elif 'code' in homework:
                 raise SystemError(f'Ошибка json, {homework["code"]}')
             else:
                 return homework
-        elif homework_statuses.status_code == HTTPStatus.REQUEST_TIMEOUT:
-            raise SystemError(f'Ошибка код {homework_statuses.status_code}')
-        elif homework_statuses.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-            raise SystemError(f'Ошибка код {homework_statuses.status_code}')
+        elif response.status_code == HTTPStatus.REQUEST_TIMEOUT:
+            raise SystemError(f'Ошибка код {response.status_code}')
+        elif response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+            raise SystemError(f'Ошибка код {response.status_code}')
         else:
             raise SystemError(
-                f'Недоступен Эндпоинт, код {homework_statuses.status_code}')
+                f'Недоступен Эндпоинт, код {response.status_code}')
 
 
 def check_response(response):
@@ -84,52 +83,56 @@ def check_response(response):
     if type(response) == dict:
         response['current_date']
         homeworks = response['homeworks']
-        if type(homeworks) == list:
-            return homeworks
-        else:
-            raise TypeError('Тип ключа homeworks не list')
     else:
         raise TypeError('Ответ от Домашки не словарь')
+    if type(homeworks) == list:
+        return homeworks
+    else:
+        raise TypeError('Тип ключа homeworks не list')
 
 
 def parse_status(homework):
     """Парсинг информации о домашке."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-
-    if homework_name is not None and homework_status is not None:
-        if homework_status in HOMEWORK_VERDICTS:
-            verdict = HOMEWORK_VERDICTS.get(homework_status)
-            return ('Изменился статус проверки '
-                    + f'работы "{homework_name}". {verdict}')
-        else:
-            raise SystemError('неизвестный статус')
+    if homework_name is None:
+        raise KeyError('В ответе API нет ключа homework_name')
+    if homework_status in HOMEWORK_VERDICTS:
+        verdict = HOMEWORK_VERDICTS.get(homework_status)
+        return ('Изменился статус проверки '
+                + f'работы "{homework_name}". {verdict}')
     else:
-        raise KeyError('нет нужных ключей в словаре')
+        raise SystemError('неизвестный статус')
 
 
 def check_tokens():
     """Проверка доступности необходимых токенов."""
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    token = all([
+        PRACTICUM_TOKEN is not None,
+        TELEGRAM_TOKEN is not None,
+        TELEGRAM_CHAT_ID is not None
+    ])
+    if not token:
         logger.critical('Ошибка импорта токенов Telegramm.')
-        return False
-    elif not PRACTICUM_TOKEN:
-        raise SystemError('Ошибка импорта токенов Домашки.')
     else:
         return True
 
 
 def main():
     """Бот для отслеживания статуса домашки на Яндекс.Домашка."""
-    global old_message
+    if check_tokens():
+        logging.info('Токены впорядке')
+    else:
+        logging.critical(
+            'Не обнаружен один из ключей PRACTICUM_TOKEN,'
+            'TELEGRAM_TOKEN, TELEGRAM_CHAT_ID'
+        )
     if not check_tokens():
         raise SystemExit('Я вышел')
-
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     logger.debug('Сообщение Telegram было отправлено')
     current_timestamp = int(time.time())
     logger.info('Бот запущен')
-    old_message = ''
     while True:
         try:
             if type(current_timestamp) is not int:
@@ -144,13 +147,11 @@ def main():
                 logger.debug('нет новых статусов')
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logger.error(message)
-            if message != old_message:
-                bot.send_message(TELEGRAM_CHAT_ID, message)
-                old_message = message
+            logger.error(message, exc_info=True)
+            send_message(bot, message)
         finally:
-            current_timestamp = int(time.time())
             time.sleep(RETRY_PERIOD)
+            logging.info(message.format(message))
 
 
 if __name__ == '__main__':
