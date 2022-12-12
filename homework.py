@@ -7,7 +7,7 @@ import requests
 import telegram
 from dotenv import load_dotenv
 
-import exceptions
+from exceptions import ResponseError
 
 load_dotenv()
 
@@ -33,43 +33,38 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
-def send_message(bot, message):
+def send_message(bot, message) -> bool:
     """Отправка сообщения в Телегу."""
     logger.debug('Регестрируем с уровнем debug , если оно отправленно')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Успешная отправка сообщения.')
+        return True
     except Exception as error:
         logging.error(f'Ошибка при запросе к основному API: {error}')
+        return False
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(timestamp):
     """запрос статуса домашней работы."""
-    timestamp = current_timestamp or int(time.time())
+    timestamp = timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT,
                                 headers=HEADERS,
                                 params=params)
-    except Exception as error:
+    except requests.exceptions.RequestException as error:
         raise SystemError(f'Ошибка получения request, {error}')
-    else:
-        if response.status_code == HTTPStatus.OK:
-            logger.info('успешное получение Эндпоинта')
-            homework = response.json()
-            if 'error' in homework:
-                raise SystemError(f'Ошибка json, {homework["error"]}')
-            elif 'code' in homework:
-                raise SystemError(f'Ошибка json, {homework["code"]}')
-            else:
-                return homework
-        elif response.status_code == HTTPStatus.REQUEST_TIMEOUT:
-            raise SystemError(f'Ошибка код {response.status_code}')
-        elif response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-            raise SystemError(f'Ошибка код {response.status_code}')
-        else:
-            raise SystemError(
-                f'Недоступен Эндпоинт, код {response.status_code}')
+    if response.status_code == HTTPStatus.OK:
+        logger.info('успешное получение Эндпоинта')
+    if response.status_code != HTTPStatus.OK:
+        raise SystemError(f'Ошибка код {response.status_code}')
+    homework = response.json()
+    for key in ('error', 'code'): 
+        if key in homework: 
+            raise ResponseError(
+                f'Отказ от обслуживания: {homework["error"]},{homework["code"]}')
+    return homework
 
 
 def check_response(response):
@@ -79,7 +74,7 @@ def check_response(response):
     except KeyError as key_error:
         msg = f'Нет ключа homeworks: {key_error}'
         logger.error(msg)
-        raise exceptions.CheckResponseException(msg)
+        raise TypeError(msg)
     if type(response) == dict:
         response['current_date']
         homeworks = response['homeworks']
@@ -130,14 +125,13 @@ def main():
     if not check_tokens():
         raise SystemExit('Я вышел')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    logger.debug('Сообщение Telegram было отправлено')
-    current_timestamp = int(time.time())
+    timestamp = 1000000
     logger.info('Бот запущен')
     while True:
         try:
-            if type(current_timestamp) is not int:
+            if type(timestamp) is not int:
                 raise SystemError('В функцию передана не дата')
-            response = get_api_answer(current_timestamp)
+            response = get_api_answer(timestamp)
             response = check_response(response)
             if len(response) > 0:
                 homework_status = parse_status(response[0])
@@ -151,7 +145,6 @@ def main():
             send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
-            logging.info(message.format(message))
 
 
 if __name__ == '__main__':

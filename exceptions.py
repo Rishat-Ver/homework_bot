@@ -52,3 +52,8 @@ class ResponseFormatError(Exception):
 
 class CheckResponseException (Exception):
     pass
+
+
+class ResponseError(Exception):
+    """Отказ от обслуживания."""
+    pass
