@@ -63,7 +63,7 @@ def get_api_answer(timestamp):
     for key in ('error', 'code'): 
         if key in homework: 
             raise ResponseError(
-                f'Отказ от обслуживания: {homework["error"]},{homework["code"]}')
+                f'Отказ:{homework["error"]}, {homework["code"]}')
     return homework
 
 
