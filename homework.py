@@ -60,8 +60,8 @@ def get_api_answer(timestamp):
     if response.status_code != HTTPStatus.OK:
         raise SystemError(f'Ошибка код {response.status_code}')
     homework = response.json()
-    for key in ('error', 'code'): 
-        if key in homework: 
+    for key in ('error', 'code'):
+        if key in homework:
             raise ResponseError(
                 f'Отказ:{homework["error"]}, {homework["code"]}')
     return homework
